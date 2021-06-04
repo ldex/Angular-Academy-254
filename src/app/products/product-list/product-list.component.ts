@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormControl } from '@angular/forms';
 import { Observable, EMPTY, combineLatest, Subscription } from 'rxjs';
-import { tap, catchError, startWith, count, flatMap, map, debounceTime, filter } from 'rxjs/operators';
+import { tap, catchError, startWith, count, flatMap, debounceTime, filter, map } from 'rxjs/operators';
 
 import { Product } from '../product.interface';
 import { ProductService } from '../product.service';
@@ -18,14 +18,25 @@ export class ProductListComponent implements OnInit {
   title: string = 'Products';
   selectedProduct: Product;
   products$: Observable<Product[]>;
+  productsNumber$: Observable<number>;
   mostExpensiveProduct$: Observable<Product>;
+  productsTotalNumber$: Observable<number>;
+  isLastPage$: Observable<boolean>;
   errorMessage;
 
   // Pagination
-  pageSize = 5;
+  productsToLoad = this.productService.productsToLoad;
+  pageSize = this.productsToLoad / 2;
   start = 0;
   end = this.pageSize;
   currentPage = 1;
+
+  loadMore(): void {
+    let skip = this.end;
+    let take = this.productsToLoad;
+
+    this.productService.initProducts(skip, take);
+  }
 
   previousPage() {
     this.start -= this.pageSize;
@@ -62,11 +73,33 @@ export class ProductListComponent implements OnInit {
 
     this.products$ = this
                       .productService
-                      .products$;
+                      .products$
+                      .pipe(
+                        filter(products => products.length > 0)
+                      );
+
+    this.productsNumber$ = this
+                              .products$
+                              .pipe(
+                                map(products => products.length),
+                                startWith(0)
+                              );
 
     this.mostExpensiveProduct$ = this
                                   .productService
                                   .mostExpensiveProduct$;
+
+    this.productsTotalNumber$ = this
+                                    .productService
+                                    .productsTotalNumber$;
+
+
+    this.isLastPage$ = combineLatest([this.productsNumber$, this.productsTotalNumber$])
+      .pipe(
+        map(([productsNumber, productsTotalNumber]) =>
+          productsNumber >= productsTotalNumber
+        )
+      );
   }
 
   refresh() {
